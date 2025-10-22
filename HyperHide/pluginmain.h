@@ -35,7 +35,7 @@
 #include "pluginsdk/XEDParse/XEDParse.h"
 
 #ifdef _WIN64
-#pragma comment(lib, "pluginsdk/x64dbg.lib")
+#pragma comment(lib, "pluginsdk/MARENOL.lib")
 #pragma comment(lib, "pluginsdk/x64bridge.lib")
 #pragma comment(lib, "pluginsdk/DeviceNameResolver/DeviceNameResolver_x64.lib")
 #pragma comment(lib, "pluginsdk/jansson/jansson_x64.lib")
