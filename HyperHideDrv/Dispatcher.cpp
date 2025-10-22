@@ -66,24 +66,6 @@ NTSTATUS DrvIOCTLDispatcher(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP Irp)
 			break;
 		}
 
-		case IOCTL_CLEAR_PEB_DEBUGGER_FLAG:
-		{
-			ULONG* Pid = (ULONG*)Irp->AssociatedIrp.SystemBuffer;
-
-			if (SetPebDeuggerFlag(PidToProcess(*Pid),FALSE) == FALSE)
-				Status = STATUS_UNSUCCESSFUL;
-			break;
-		}
-
-		case IOCTL_SET_PEB_DEBUGGER_FLAG:
-		{
-			ULONG* Pid = (ULONG*)Irp->AssociatedIrp.SystemBuffer;
-
-			if (SetPebDeuggerFlag(PidToProcess(*Pid), TRUE) == FALSE)
-				Status = STATUS_UNSUCCESSFUL;
-			break;
-		}
-
 		case IOCTL_SET_HYPERVISOR_VISIBILITY:
 		{
 			BOOLEAN Value = *(BOOLEAN*)Irp->AssociatedIrp.SystemBuffer;

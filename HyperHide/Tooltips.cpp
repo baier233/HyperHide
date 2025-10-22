@@ -183,16 +183,8 @@ HWND CreateTooltips(HWND hDlg)
             L"PROCESSINFOCLASS value ProcessBreakOnTermination can be used to generate a bsod on process termination."
         },
         {
-            IDC_CHK_CLEARPEBBEINGDEBUGGED,
-            L"Clear BeingDebugged which indicates that process is debugged"
-        },
-        {
             IDC_CHK_CLEARHEAPFLAGS,
             L"Clear HeapFlags and HeapForceFlags which indicates that process is debugged"
-        },
-        {
-            IDC_CHK_CLEARPEBNTGLOBALFLAG,
-            L"Clear NtGlobalFlag which indcates that process is debugged."
         },
         {
             IDC_CHK_CLEARKUSERSHAREDDATA,

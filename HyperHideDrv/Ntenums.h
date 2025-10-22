@@ -14,10 +14,7 @@ enum _LDR_DLL_LOAD_REASON
     LoadReasonUnknown = -1
 };
 
-typedef enum _PSCREATETHREADNOTIFYTYPE {
-    PsCreateThreadNotifyNonSystem = 0,
-    PsCreateThreadNotifySubsystems = 1
-} PSCREATETHREADNOTIFYTYPE;
+
 
 enum SYSDBG_COMMAND
 {
@@ -25,7 +22,7 @@ enum SYSDBG_COMMAND
     SysDbgGetLiveKernelDump = 37,
 };
 
-enum JOBOBJECTINFOCLASS
+enum JOBOBJECTINFOCLASS 
 {
     JobObjectBasicAccountingInformation = 1,
     JobObjectBasicLimitInformation = 2,

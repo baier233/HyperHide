@@ -46,6 +46,8 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 
 			if (ReturnLength != 0)
 				ProbeForWrite(ReturnLength, 4, 1);
+
+
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER)
 		{
@@ -65,29 +67,32 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 				{
 					__try
 					{
-						*(ULONG64*)ProcessInformation = NULL;
-						if (ReturnLength != NULL) *ReturnLength = sizeof(ULONG64);
+						*(PHANDLE)ProcessInformation = nullptr;
 
-						Status = STATUS_PORT_NOT_SET;
+						if (ReturnLength != nullptr)
+							*ReturnLength = sizeof(HANDLE);
+
 					}
 
 					__except (EXCEPTION_EXECUTE_HANDLER)
 					{
-						Status = GetExceptionCode();
+						return GetExceptionCode();
 					}
 
 					ObDereferenceObject(TargetProcess);
-					return Status;
+					return STATUS_PORT_NOT_SET;
 				}
 
 				ObDereferenceObject(TargetProcess);
-				return OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
 			}
 
-			return Status;
+			return OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
 		}
 
-		else if (ProcessInformationClass == ProcessDebugPort)
+
+		NTSTATUS ret = Undocumented::NtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
+		
+		if (ProcessInformationClass == ProcessDebugPort)
 		{
 			if (ProcessInformationLength != sizeof(ULONG64))
 				return STATUS_INFO_LENGTH_MISMATCH;
@@ -100,9 +105,12 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 				{
 					__try
 					{
-						*(ULONG64*)ProcessInformation = 0;
-						if (ReturnLength != 0)
-							*ReturnLength = sizeof(ULONG64);
+
+						BACKUP_RETURNLENGTH();
+
+						*(ULONG_PTR*)ProcessInformation = 0;
+
+						RESTORE_RETURNLENGTH();
 					}
 					__except (EXCEPTION_EXECUTE_HANDLER)
 					{
@@ -110,14 +118,12 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 					}
 					
 					ObDereferenceObject(TargetProcess);
-					return Status;
+					return ret;
 				}
 
 				ObDereferenceObject(TargetProcess);
-				return OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
 			}
 
-			return Status;
 		}
 
 		else if (ProcessInformationClass == ProcessDebugFlags)
@@ -133,9 +139,11 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 				{
 					__try
 					{
-						*(ULONG*)ProcessInformation = (Hider::QueryHiddenProcess(TargetProcess)->ValueProcessDebugFlags == 0) ? PROCESS_DEBUG_INHERIT : 0;
-						if (ReturnLength != 0)
-							*ReturnLength = sizeof(ULONG);
+						BACKUP_RETURNLENGTH();
+
+						*(unsigned int*)ProcessInformation = TRUE;
+
+						RESTORE_RETURNLENGTH();
 					}
 					__except (EXCEPTION_EXECUTE_HANDLER)
 					{
@@ -147,13 +155,11 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 				}
 
 				ObDereferenceObject(TargetProcess);
-				return OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
 			}
 
-			return Status;
 		}
 
-		else if (ProcessInformationClass == ProcessBreakOnTermination)
+		/*else if (ProcessInformationClass == ProcessBreakOnTermination)
 		{
 			if (ProcessInformationLength != 4)
 				return STATUS_INFO_LENGTH_MISMATCH;
@@ -180,14 +186,11 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 				}
 
 				ObDereferenceObject(TargetProcess);
-				return OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
 			}
 
-			return Status;
-		}
+		}*/
 
-		NTSTATUS Status = OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
-		if (NT_SUCCESS(Status) == TRUE) 
+		if (NT_SUCCESS(ret) == TRUE) 
 		{
 			PEPROCESS TargetProcess;
 			NTSTATUS ObStatus = ObReferenceObjectByHandle(ProcessHandle, 0, *PsProcessType, KernelMode, (PVOID*)&TargetProcess, NULL);
@@ -212,7 +215,7 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 									reinterpret_cast<ULONG_PTR>(PsGetProcessId(ExplorerProcess));
 							}
 							RESTORE_RETURNLENGTH();
-							return Status;
+							return ret;
 						}
 
 						else if (ProcessInformationClass == ProcessIoCounters)
@@ -220,7 +223,7 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 							BACKUP_RETURNLENGTH();
 							((PIO_COUNTERS)ProcessInformation)->OtherOperationCount = 1;
 							RESTORE_RETURNLENGTH();
-							return Status;
+							return ret;
 						}
 
 						else if (ProcessInformationClass == ProcessHandleTracing)
@@ -232,7 +235,7 @@ NTSTATUS NTAPI HookedNtQueryInformationProcess(
 			}
 		}
 
-		return Status;
+		return ret;
 	}
 
 	return OriginalNtQueryInformationProcess(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
@@ -563,49 +566,70 @@ NTSTATUS NTAPI HookedNtQueryObject(
 		ObjectInformation != NULL)
 	{
 
+
+		UNICODE_STRING DebugObject;
+		RtlInitUnicodeString(&DebugObject, L"DebugObject");
+
+
 		if (ObjectInformationClass == ObjectTypeInformation)
 		{
-			UNICODE_STRING DebugObject;
-			RtlInitUnicodeString(&DebugObject, L"DebugObject");
-			POBJECT_TYPE_INFORMATION Type = (POBJECT_TYPE_INFORMATION)ObjectInformation;
 
-			if (RtlEqualUnicodeString(&Type->TypeName, &DebugObject, FALSE) == TRUE)
+			__try
 			{
 				BACKUP_RETURNLENGTH();
-				Type->TotalNumberOfObjects -= g_HyperHide.NumberOfActiveDebuggers;
-				Type->TotalNumberOfHandles -= g_HyperHide.NumberOfActiveDebuggers;
+
+				OBJECT_TYPE_INFORMATION* type = (OBJECT_TYPE_INFORMATION*)ObjectInformation;
+				ProbeForRead(type->TypeName.Buffer, 1, 1);
+				if (RtlEqualUnicodeString(&type->TypeName, &DebugObject, FALSE)) //DebugObject
+				{
+					type->TotalNumberOfObjects = 0;
+					type->TotalNumberOfHandles = 0;
+				}
+
 				RESTORE_RETURNLENGTH();
 			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
+		
 
 			return Status;
 		}
 
 		else if (ObjectInformationClass == ObjectTypesInformation)
 		{
-			UNICODE_STRING DebugObject;
-			RtlInitUnicodeString(&DebugObject, L"DebugObject");
-			POBJECT_ALL_INFORMATION ObjectAllInfo = (POBJECT_ALL_INFORMATION)ObjectInformation;
-			UCHAR* ObjInfoLocation = (UCHAR*)ObjectAllInfo->ObjectTypeInformation;
-			ULONG TotalObjects = ObjectAllInfo->NumberOfObjectsTypes;
-
-			BACKUP_RETURNLENGTH();
-			for (ULONG i = 0; i < TotalObjects; i++)
+			__try
 			{
-				POBJECT_TYPE_INFORMATION ObjectTypeInfo = (POBJECT_TYPE_INFORMATION)ObjInfoLocation;
-				if (RtlEqualUnicodeString(&ObjectTypeInfo->TypeName, &DebugObject, FALSE) == TRUE)
+				BACKUP_RETURNLENGTH();
+
+				OBJECT_ALL_INFORMATION* pObjectAllInfo = (OBJECT_ALL_INFORMATION*)ObjectInformation;
+				unsigned char* pObjInfoLocation = (unsigned char*)pObjectAllInfo->ObjectTypeInformation;
+				unsigned int TotalObjects = pObjectAllInfo->NumberOfObjectsTypes;
+				for (unsigned int i = 0; i < TotalObjects; i++)
 				{
-					ObjectTypeInfo->TotalNumberOfObjects -= g_HyperHide.NumberOfActiveDebuggers;
-					ObjectTypeInfo->TotalNumberOfHandles -= g_HyperHide.NumberOfActiveDebuggers;
+					OBJECT_TYPE_INFORMATION* pObjectTypeInfo = (OBJECT_TYPE_INFORMATION*)pObjInfoLocation;
+					ProbeForRead(pObjectTypeInfo, 1, 1);
+					ProbeForRead(pObjectTypeInfo->TypeName.Buffer, 1, 1);
+					if (RtlEqualUnicodeString(&pObjectTypeInfo->TypeName, &DebugObject, FALSE)) //DebugObject
+					{
+						pObjectTypeInfo->TotalNumberOfObjects = 0;
+						pObjectTypeInfo->TotalNumberOfHandles = 0;
+					}
+					pObjInfoLocation = (unsigned char*)pObjectTypeInfo->TypeName.Buffer;
+					pObjInfoLocation += pObjectTypeInfo->TypeName.MaximumLength;
+					ULONG_PTR tmp = ((ULONG_PTR)pObjInfoLocation) & -(LONG_PTR)sizeof(void*);
+					if ((ULONG_PTR)tmp != (ULONG_PTR)pObjInfoLocation)
+						tmp += sizeof(void*);
+					pObjInfoLocation = ((unsigned char*)tmp);
 				}
-				ObjInfoLocation = (UCHAR*)ObjectTypeInfo->TypeName.Buffer;
-				ObjInfoLocation += ObjectTypeInfo->TypeName.MaximumLength;
-				ULONG64 Tmp = ((ULONG64)ObjInfoLocation) & -(LONG64)sizeof(PVOID);
-				if ((ULONG64)Tmp != (ULONG64)ObjInfoLocation)
-					Tmp += sizeof(PVOID);
-				ObjInfoLocation = ((UCHAR*)Tmp);
+
+				RESTORE_RETURNLENGTH();
 			}
-			RESTORE_RETURNLENGTH();
-			return Status;
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 	}
 
@@ -874,7 +898,7 @@ NTSTATUS NTAPI HookedNtSetContextThread(HANDLE ThreadHandle, PCONTEXT Context)
 					ObDereferenceObject(TargethThread);
 					return STATUS_INVALID_HANDLE;
 				}
-
+					
 				__try
 				{
 					ProbeForWrite(reinterpret_cast<char*>(Context) + 48, 4, 1);
@@ -1811,6 +1835,7 @@ BOOLEAN HookNtSyscalls()
 
 	for (auto& syscallToHook : NtSyscallsToHook)
 	{
+		//PVOID AddressOfTargetFunction = (PVOID)((ULONG64)NtTable->ServiceTable + (NtTable->ServiceTable[SyscallIndex] >> 4));
 		if (!SSDT::HookNtSyscall(syscallToHook.SyscallNumber, syscallToHook.HookFunctionAddress, syscallToHook.OriginalFunctionAddress))
 		{
 			LogError("%s hook failed", syscallToHook.SyscallName.data());
@@ -1914,4 +1939,529 @@ BOOLEAN HookKiDispatchException()
 BOOLEAN HookSyscalls()
 {
 	return HookNtSyscalls() && HookWin32kSyscalls() && HookKiDispatchException();
+}
+
+
+
+typedef NTSTATUS(NTAPI* ZWQUERYINFORMATIONPROCESS)(
+	IN HANDLE ProcessHandle,
+	IN PROCESSINFOCLASS ProcessInformationClass,
+	OUT PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* NTQUERYINFORMATIONTHREAD)(
+	IN HANDLE ThreadHandle,
+	IN THREADINFOCLASS ThreadInformationClass,
+	IN OUT PVOID ThreadInformation,
+	IN ULONG ThreadInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* NTQUERYOBJECT)(
+	IN HANDLE Handle OPTIONAL,
+	IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+	OUT PVOID ObjectInformation OPTIONAL,
+	IN ULONG ObjectInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* ZWQUERYSYSTEMINFORMATION)(
+	IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	OUT PVOID SystemInformation,
+	IN ULONG SystemInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* NTQUERYSYSTEMINFORMATION)(
+	IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	OUT PVOID SystemInformation,
+	IN ULONG SystemInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* NTCLOSE)(
+	IN HANDLE Handle
+	);
+
+typedef NTSTATUS(NTAPI* NTGETCONTEXTTHREAD)(
+	IN HANDLE ThreadHandle,
+	IN OUT PCONTEXT Context
+	);
+
+typedef NTSTATUS(NTAPI* NTSETCONTEXTTHREAD)(
+	IN HANDLE ThreadHandle,
+	IN PCONTEXT Context
+	);
+
+typedef NTSTATUS(NTAPI* NTCONTINUE)(
+	IN PCONTEXT Context,
+	BOOLEAN RaiseAlert
+	);
+
+typedef NTSTATUS(NTAPI* NTDUPLICATEOBJECT)(
+	IN HANDLE SourceProcessHandle,
+	IN HANDLE SourceHandle,
+	IN HANDLE TargetProcessHandle,
+	OUT PHANDLE TargetHandle,
+	IN ACCESS_MASK DesiredAccess OPTIONAL,
+	IN ULONG HandleAttributes,
+	IN ULONG Options
+	);
+
+typedef NTSTATUS(NTAPI* KERAISEUSEREXCEPTION)(
+	IN NTSTATUS ExceptionCode
+	);
+
+typedef NTSTATUS(NTAPI* ZWSETINFORMATIONTHREAD)(
+	IN HANDLE ThreadHandle,
+	IN THREADINFOCLASS ThreadInformationClass,
+	IN PVOID ThreadInformation,
+	IN ULONG ThreadInformationLength
+	);
+
+typedef NTSTATUS(NTAPI* NTSETINFORMATIONTHREAD)(
+	IN HANDLE ThreadHandle,
+	IN THREADINFOCLASS ThreadInformationClass,
+	IN PVOID ThreadInformation,
+	IN ULONG ThreadInformationLength
+	);
+
+typedef NTSTATUS(NTAPI* NTSETINFORMATIONPROCESS)(
+	IN HANDLE ProcessHandle,
+	IN PROCESSINFOCLASS ProcessInformationClass,
+	IN PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength
+	);
+
+typedef NTSTATUS(NTAPI* NTQUERYINFORMATIONPROCESS)(
+	IN HANDLE ProcessHandle,
+	IN PROCESSINFOCLASS ProcessInformationClass,
+	OUT PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* NTSYSTEMDEBUGCONTROL)(
+	IN SYSDBG_COMMAND Command,
+	IN PVOID InputBuffer OPTIONAL,
+	IN ULONG InputBufferLength,
+	OUT PVOID OutputBuffer OPTIONAL,
+	IN ULONG OutputBufferLength,
+	OUT PULONG ReturnLength OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* ZWCREATETHREADEX)(
+	OUT PHANDLE ThreadHandle,
+	IN ACCESS_MASK DesiredAccess,
+	IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+	IN HANDLE ProcessHandle,
+	IN PUSER_THREAD_START_ROUTINE StartRoutine,
+	IN PVOID Argument OPTIONAL,
+	IN ULONG CreateFlags,
+	IN SIZE_T ZeroBits OPTIONAL,
+	IN SIZE_T StackSize OPTIONAL,
+	IN SIZE_T MaximumStackSize OPTIONAL,
+	IN PPS_ATTRIBUTE_LIST AttributeList OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* NTCREATETHREADEX)(
+	OUT PHANDLE ThreadHandle,
+	IN ACCESS_MASK DesiredAccess,
+	IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+	IN HANDLE ProcessHandle,
+	IN PUSER_THREAD_START_ROUTINE StartRoutine,
+	IN PVOID Argument OPTIONAL,
+	IN ULONG CreateFlags,
+	IN SIZE_T ZeroBits OPTIONAL,
+	IN SIZE_T StackSize OPTIONAL,
+	IN SIZE_T MaximumStackSize OPTIONAL,
+	IN PPS_ATTRIBUTE_LIST AttributeList OPTIONAL
+	);
+
+typedef NTSTATUS(NTAPI* ZWTERMINATETHREAD)(
+	IN HANDLE ThreadHandle OPTIONAL,
+	IN NTSTATUS ExitStatus
+	);
+
+typedef NTSTATUS(NTAPI* NTTERMINATETHREAD)(
+	IN HANDLE ThreadHandle OPTIONAL,
+	IN NTSTATUS ExitStatus
+	);
+
+static ZWQUERYINFORMATIONPROCESS ZwQIP = 0;
+static NTQUERYINFORMATIONTHREAD NtQIT = 0;
+static NTQUERYOBJECT NtQO = 0;
+static ZWQUERYSYSTEMINFORMATION ZwQSI = 0;
+static NTQUERYSYSTEMINFORMATION NtQSI = 0;
+static NTCLOSE NtClo = 0;
+static NTSETCONTEXTTHREAD NtGCT = 0;
+static NTSETCONTEXTTHREAD NtSCT = 0;
+static NTCONTINUE NtCon = 0;
+static NTDUPLICATEOBJECT NtDO = 0;
+static KERAISEUSEREXCEPTION KeRUE = 0;
+static ZWSETINFORMATIONTHREAD ZwSIT = 0;
+static NTSETINFORMATIONTHREAD NtSIT = 0;
+static NTSETINFORMATIONPROCESS NtSIP = 0;
+static NTQUERYINFORMATIONPROCESS NtQIP = 0;
+static NTSYSTEMDEBUGCONTROL NtSDBC = 0;
+static ZWCREATETHREADEX ZwCrThrEx = 0;
+static NTCREATETHREADEX NtCrThrEx = 0;
+static ZWTERMINATETHREAD ZwTermThr = 0;
+static NTTERMINATETHREAD NtTermThr = 0;
+
+NTSTATUS NTAPI Undocumented::ZwQueryInformationProcess(
+	IN HANDLE ProcessHandle,
+	IN PROCESSINFOCLASS ProcessInformationClass,
+	OUT PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength,
+	OUT PULONG ReturnLength OPTIONAL)
+{
+	return ZwQIP(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtQueryInformationThread(
+	IN HANDLE ThreadHandle,
+	IN THREADINFOCLASS ThreadInformationClass,
+	IN OUT PVOID ThreadInformation,
+	IN ULONG ThreadInformationLength,
+	OUT PULONG ReturnLength OPTIONAL)
+{
+	return NtQIT(ThreadHandle, ThreadInformationClass, ThreadInformation, ThreadInformationLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtQueryObject(
+	IN HANDLE Handle OPTIONAL,
+	IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+	OUT PVOID ObjectInformation OPTIONAL,
+	IN ULONG ObjectInformationLength,
+	OUT PULONG ReturnLength OPTIONAL)
+{
+	return NtQO(Handle, ObjectInformationClass, ObjectInformation, ObjectInformationLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::ZwQuerySystemInformation(
+	IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	OUT PVOID SystemInformation,
+	IN ULONG SystemInformationLength,
+	OUT PULONG ReturnLength OPTIONAL)
+{
+	return ZwQSI(SystemInformationClass, SystemInformation, SystemInformationLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtQuerySystemInformation(
+	IN SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	OUT PVOID SystemInformation,
+	IN ULONG SystemInformationLength,
+	OUT PULONG ReturnLength OPTIONAL)
+{
+	return NtQSI(SystemInformationClass, SystemInformation, SystemInformationLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtClose(
+	IN HANDLE Handle)
+{
+	return NtClo(Handle);
+}
+
+NTSTATUS NTAPI Undocumented::NtGetContextThread(
+	IN HANDLE ThreadHandle,
+	IN OUT PCONTEXT Context)
+{
+	return NtGCT(ThreadHandle, Context);
+}
+
+NTSTATUS NTAPI Undocumented::NtSetContextThread(
+	IN HANDLE ThreadHandle,
+	IN PCONTEXT Context)
+{
+	return NtSCT(ThreadHandle, Context);
+}
+
+NTSTATUS NTAPI Undocumented::NtContinue(
+	IN PCONTEXT Context,
+	BOOLEAN RaiseAlert)
+{
+	return NtCon(Context, RaiseAlert);
+}
+
+NTSTATUS NTAPI Undocumented::NtDuplicateObject(
+	IN HANDLE SourceProcessHandle,
+	IN HANDLE SourceHandle,
+	IN HANDLE TargetProcessHandle,
+	OUT PHANDLE TargetHandle,
+	IN ACCESS_MASK DesiredAccess OPTIONAL,
+	IN ULONG HandleAttributes,
+	IN ULONG Options)
+{
+	return NtDO(SourceProcessHandle, SourceHandle, TargetProcessHandle, TargetHandle, DesiredAccess, HandleAttributes, Options);
+}
+
+NTSTATUS NTAPI Undocumented::KeRaiseUserException(
+	IN NTSTATUS ExceptionCode)
+{
+	return KeRUE(ExceptionCode);
+}
+
+NTSTATUS NTAPI Undocumented::ZwSetInformationThread(
+	IN HANDLE ThreadHandle,
+	IN THREADINFOCLASS ThreadInformationClass,
+	IN PVOID ThreadInformation,
+	IN ULONG ThreadInformationLength)
+{
+	return ZwSIT(ThreadHandle, ThreadInformationClass, ThreadInformation, ThreadInformationLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtSetInformationThread(
+	IN HANDLE ThreadHandle,
+	IN THREADINFOCLASS ThreadInformationClass,
+	IN PVOID ThreadInformation,
+	IN ULONG ThreadInformationLength)
+{
+	return NtSIT(ThreadHandle, ThreadInformationClass, ThreadInformation, ThreadInformationLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtSetInformationProcess(
+	IN HANDLE ProcessHandle,
+	IN PROCESSINFOCLASS ProcessInformationClass,
+	IN PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength)
+{
+	return NtSIP(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtQueryInformationProcess(
+	IN HANDLE ProcessHandle,
+	IN PROCESSINFOCLASS ProcessInformationClass,
+	OUT PVOID ProcessInformation,
+	IN ULONG ProcessInformationLength,
+	OUT PULONG ReturnLength OPTIONAL)
+{
+	return NtQIP(ProcessHandle, ProcessInformationClass, ProcessInformation, ProcessInformationLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::NtSystemDebugControl(
+	IN SYSDBG_COMMAND Command,
+	IN PVOID InputBuffer,
+	IN ULONG InputBufferLength,
+	OUT PVOID OutputBuffer,
+	IN ULONG OutputBufferLength,
+	OUT PULONG ReturnLength)
+{
+	return NtSDBC(Command, InputBuffer, InputBufferLength, OutputBuffer, OutputBufferLength, ReturnLength);
+}
+
+NTSTATUS NTAPI Undocumented::ZwCreateThreadEx(
+	OUT PHANDLE ThreadHandle,
+	IN ACCESS_MASK DesiredAccess,
+	IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+	IN HANDLE ProcessHandle,
+	IN PUSER_THREAD_START_ROUTINE StartRoutine,
+	IN PVOID Argument OPTIONAL,
+	IN ULONG CreateFlags,
+	IN SIZE_T ZeroBits OPTIONAL,
+	IN SIZE_T StackSize OPTIONAL,
+	IN SIZE_T MaximumStackSize OPTIONAL,
+	IN PPS_ATTRIBUTE_LIST AttributeList OPTIONAL)
+{
+	return ZwCrThrEx(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartRoutine, Argument, CreateFlags, ZeroBits, StackSize, MaximumStackSize, AttributeList);
+}
+
+NTSTATUS NTAPI Undocumented::NtCreateThreadEx(
+	OUT PHANDLE ThreadHandle,
+	IN ACCESS_MASK DesiredAccess,
+	IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+	IN HANDLE ProcessHandle,
+	IN PUSER_THREAD_START_ROUTINE StartRoutine,
+	IN PVOID Argument OPTIONAL,
+	IN ULONG CreateFlags,
+	IN SIZE_T ZeroBits OPTIONAL,
+	IN SIZE_T StackSize OPTIONAL,
+	IN SIZE_T MaximumStackSize OPTIONAL,
+	IN PPS_ATTRIBUTE_LIST AttributeList OPTIONAL)
+{
+	return NtCrThrEx(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartRoutine, Argument, CreateFlags, ZeroBits, StackSize, MaximumStackSize, AttributeList);
+}
+
+NTSTATUS NTAPI Undocumented::ZwTerminateThread(
+	IN HANDLE ThreadHandle OPTIONAL,
+	IN NTSTATUS ExitStatus)
+{
+	return ZwTermThr(ThreadHandle, ExitStatus);
+}
+
+NTSTATUS NTAPI Undocumented::NtTerminateThread(
+	IN HANDLE ThreadHandle OPTIONAL,
+	IN NTSTATUS ExitStatus)
+{
+	return NtTermThr(ThreadHandle, ExitStatus);
+}
+
+bool Undocumented::UndocumentedInit()
+{
+	//Exported kernel functions after this
+	if (!ZwQIP)
+	{
+		UNICODE_STRING routineName;
+		RtlInitUnicodeString(&routineName, L"ZwQueryInformationProcess");
+		ZwQIP = (ZWQUERYINFORMATIONPROCESS)MmGetSystemRoutineAddress(&routineName);
+		if (!ZwQIP)
+			return false;
+	}
+	if (!NtQIT)
+	{
+		UNICODE_STRING routineName;
+		RtlInitUnicodeString(&routineName, L"NtQueryInformationThread");
+		NtQIT = (NTQUERYINFORMATIONTHREAD)MmGetSystemRoutineAddress(&routineName);
+		if (!NtQIT)
+			return false;
+	}
+	if (!ZwQSI)
+	{
+		UNICODE_STRING routineName;
+		RtlInitUnicodeString(&routineName, L"ZwQuerySystemInformation");
+		ZwQSI = (ZWQUERYSYSTEMINFORMATION)MmGetSystemRoutineAddress(&routineName);
+		if (!ZwQSI)
+			return false;
+	}
+	if (!NtQSI)
+	{
+		NtQSI = (NTQUERYSYSTEMINFORMATION)OriginalNtQuerySystemInformation;
+		if (!NtQSI)
+			return false;
+	}
+	if (!NtClo)
+	{
+	
+		NtClo = OriginalNtClose;
+		if (!NtClo)
+			return false;
+	}
+	if (!NtDO)
+	{
+		UNICODE_STRING routineName;
+		RtlInitUnicodeString(&routineName, L"NtDuplicateObject");
+		NtDO = (NTDUPLICATEOBJECT)MmGetSystemRoutineAddress(&routineName);
+		if (!NtDO)
+			return false;
+	}
+	if (!KeRUE)
+	{
+		UNICODE_STRING routineName;
+		RtlInitUnicodeString(&routineName, L"KeRaiseUserException");
+		KeRUE = (KERAISEUSEREXCEPTION)MmGetSystemRoutineAddress(&routineName);
+		if (!KeRUE)
+			return false;
+	}
+	if (!ZwSIT)
+	{
+		UNICODE_STRING routineName;
+		RtlInitUnicodeString(&routineName, L"ZwSetInformationThread");
+		ZwSIT = (ZWSETINFORMATIONTHREAD)MmGetSystemRoutineAddress(&routineName);
+		if (!ZwSIT)
+			return false;
+	}
+	if (!NtSIT)
+	{
+		NtSIT = (NTSETINFORMATIONTHREAD)OriginalNtSetInformationThread;
+		if (!NtSIT)
+			return false;
+	}
+	if (!NtSIP)
+	{
+		NtSIP = (NTSETINFORMATIONPROCESS)OriginalNtSetInformationProcess;
+		if (!NtSIP)
+			return false;
+	}
+	if (!NtQIP)
+	{
+		NtQIP = (NTQUERYINFORMATIONPROCESS)OriginalNtQueryInformationProcess;
+		if (!NtQIP)
+			return false;
+	}
+	//SSDT-only functions after this
+	if (!NtQO)
+	{
+		
+		NtQO = (NTQUERYOBJECT)OriginalNtQueryObject;
+		if (!NtQO)
+			return false;
+	}
+	if (!NtGCT)
+	{
+		NtGCT = (NTGETCONTEXTTHREAD)OriginalNtGetContextThread;
+		if (!NtGCT)
+			return false;
+	}
+	if (!NtSCT)
+	{
+		NtSCT = (NTSETCONTEXTTHREAD)OriginalNtSetContextThread;
+		if (!NtSCT)
+			return false;
+	}
+	if (!NtCon)
+	{
+		NtCon = (NTCONTINUE)OriginalNtContinue;
+		if (!NtCon)
+			return false;
+	}
+	if (!NtSDBC)
+	{
+		NtSDBC = (NTSYSTEMDEBUGCONTROL)OriginalNtSystemDebugControl;
+		if (!NtSDBC)
+			return false;
+	}
+	if ((NtBuildNumber & 0xFFFF) >= 6000 && !ZwCrThrEx) // only exists on >= Vista
+	{
+
+		SyscallInfo info = SyscallInfo{ 0, "ZwCreateThreadEx", 0, 0 };
+
+		if (!GetNtSyscallNumber(info))
+		{
+			LogError("Couldn't find all nt syscalls");
+			return FALSE;
+		}
+
+
+		ZwCrThrEx = (ZWCREATETHREADEX)SSDT::GetAddressOfSyscall(info.SyscallNumber);
+		if (!ZwCrThrEx)
+			return false;
+	}
+	if ((NtBuildNumber & 0xFFFF) >= 6000 && !NtCrThrEx) // only exists on >= Vista
+	{
+		NtCrThrEx = (NTCREATETHREADEX)OriginalNtCreateThreadEx;
+		if (!NtCrThrEx)
+			return false;
+	}
+	if (!ZwTermThr)
+	{
+		SyscallInfo info = SyscallInfo{ 0, "ZwTerminateThread", 0, 0 };
+
+		if (!GetNtSyscallNumber(info))
+		{
+			LogError("Couldn't find all nt syscalls");
+			return FALSE;
+		}
+
+
+		ZwTermThr = (ZWTERMINATETHREAD)SSDT::GetAddressOfSyscall(info.SyscallNumber);
+		if (!ZwTermThr)
+			return false;
+	}
+	if (!NtTermThr)
+	{
+		SyscallInfo info = SyscallInfo{ 0, "NtTerminateThread", 0, 0 };
+
+		if (!GetNtSyscallNumber(info))
+		{
+			LogError("Couldn't find all nt syscalls");
+			return FALSE;
+		}
+
+		NtTermThr = (NTTERMINATETHREAD)SSDT::GetAddressOfSyscall(info.SyscallNumber);
+		if (!NtTermThr)
+			return false;
+	}
+	return true;
 }

@@ -361,6 +361,3 @@ typedef struct _PEB32
     ULONG NtGlobalFlag2;                                                    //0x478
 }PEB32, * PPEB32;
 
-BOOLEAN SetPebDeuggerFlag(PEPROCESS TargetProcess, BOOLEAN Value);
-
-BOOLEAN ClearPebNtGlobalFlag(PEPROCESS TargetProcess);

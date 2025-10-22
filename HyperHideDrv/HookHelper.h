@@ -13,6 +13,8 @@ struct SyscallInfo
 
 BOOLEAN GetNtSyscallNumbers(std::array<SyscallInfo, 22>& SyscallsToFind);
 
+BOOLEAN GetNtSyscallNumber(SyscallInfo& SyscallsToFind);
+
 BOOLEAN GetWin32kSyscallNumbers(std::array<SyscallInfo, 5>& SyscallsToFind);
 
 BOOLEAN IsWindowBad(HANDLE hWnd);

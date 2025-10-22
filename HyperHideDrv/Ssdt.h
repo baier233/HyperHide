@@ -9,5 +9,7 @@ namespace SSDT
 
 	BOOLEAN GetSsdt();
 
+	PVOID GetAddressOfSyscall(SHORT SyscallIndex);
+
 	PVOID GetWin32KFunctionAddress(CONST CHAR* SyscallName, SHORT SyscallIndex);
 }

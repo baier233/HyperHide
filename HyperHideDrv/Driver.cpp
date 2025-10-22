@@ -129,6 +129,8 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT Driver, PCUNICODE_STRING Reg)
 		return STATUS_UNSUCCESSFUL;
 	}
 
+	Undocumented::UndocumentedInit();
+
 	LogInfo("Syscalls Hooked");
 
 	RtlInitUnicodeString(&DriverName, L"\\Device\\HyperHideDrv");

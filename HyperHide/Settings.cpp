@@ -36,8 +36,6 @@ VOID Settings::LoadProfile(std::string ProfileName)
     // Other
     CurrentProfile.HookKiExceptionDispatch = IniLoadValue(IniFile, ProfileName, "KiExceptionDispatch", 1);
     CurrentProfile.HookKuserSharedData = IniLoadValue(IniFile, ProfileName, "HookKuserSharedData", 1);
-    CurrentProfile.ClearPebBeingDebugged = IniLoadValue(IniFile, ProfileName, "PebBeingDebugged", 1);
-    CurrentProfile.ClearPebNtGlobalFlag = IniLoadValue(IniFile, ProfileName, "PebNtGlobalFlag", 1);
     CurrentProfile.ClearHeapFlags = IniLoadValue(IniFile, ProfileName, "HeapFlags", 1);
     CurrentProfile.ClearKuserSharedData = IniLoadValue(IniFile, ProfileName, "ClearKuserSharedData", 1);
     CurrentProfile.ClearHideFromDebuggerFlag = IniLoadValue(IniFile, ProfileName, "ThreadHideFromDebuggerFlag", 1);
@@ -85,8 +83,6 @@ BOOL Settings::SaveProfile()
     // Other
     Success &= IniSaveValue(IniFile, CurrentProfileName, "KiExceptionDispatch", CurrentProfile.HookKiExceptionDispatch);
     Success &= IniSaveValue(IniFile, CurrentProfileName, "HookKuserSharedData", CurrentProfile.HookKuserSharedData);
-    Success &= IniSaveValue(IniFile, CurrentProfileName, "PebBeingDebugged", CurrentProfile.ClearPebBeingDebugged);
-    Success &= IniSaveValue(IniFile, CurrentProfileName, "PebNtGlobalFlag", CurrentProfile.ClearPebNtGlobalFlag);
     Success &= IniSaveValue(IniFile, CurrentProfileName, "HeapFlags", CurrentProfile.ClearHeapFlags);
     Success &= IniSaveValue(IniFile, CurrentProfileName, "ClearKuserSharedData", CurrentProfile.ClearKuserSharedData);
     Success &= IniSaveValue(IniFile, CurrentProfileName, "ThreadHideFromDebuggerFlag", CurrentProfile.ClearHideFromDebuggerFlag);

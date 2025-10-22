@@ -129,8 +129,15 @@ PLUG_EXPORT void CBRESUMEDEBUG(CBTYPE cbType, PLUG_CB_RESUMEDEBUG* info)
 
 #include "pluginsdk/_scriptapi_module.h"   
 
+static bool hidden = false;
 void cBreakpoint(CBTYPE cbType, void* de)
 {
+
+	if (!hidden)
+	{
+		DbgCmdExecDirect("hide");
+		hidden = true;
+	}
 
 	duint entryPoint = Script::Module::GetMainModuleEntry();
 
@@ -160,14 +167,12 @@ void DebugLoop(CBTYPE cbType, void* callbackInfo)
 	{
 		if (PebFix == TRUE)
 		{
-			g_HyperHideDrv->CallDriver(IOCTL_SET_PEB_DEBUGGER_FLAG);
 			PebFix = FALSE;
 		}
 
 		if (DebugEvent->u.LoadDll.lpBaseOfDll == NtdllModule)
 		{
 			g_HyperHideDrv->SetTargetPid(DebugEvent->dwProcessId);
-			g_HyperHideDrv->CallDriver(IOCTL_CLEAR_PEB_DEBUGGER_FLAG);
 			PebFix = TRUE;
 		}
 	}
@@ -178,11 +183,7 @@ void DebugLoop(CBTYPE cbType, void* callbackInfo)
 	{
 		if (DebugEvent->u.CreateProcessInfo.lpStartAddress == NULL)
 		{
-			if (Attached == TRUE && BeingDebuggedCleared == FALSE && g_Settings->GetCurrentProfile().ClearPebBeingDebugged == TRUE)
-			{
-				BeingDebuggedCleared = TRUE;
-				g_HyperHideDrv->CallDriver(IOCTL_CLEAR_PEB_DEBUGGER_FLAG);
-			}
+			
 		}
 
 		break;

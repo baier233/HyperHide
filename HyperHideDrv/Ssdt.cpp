@@ -22,6 +22,11 @@ extern HYPER_HIDE_GLOBAL_DATA g_HyperHide;
 
 namespace SSDT 
 {
+
+	PVOID GetAddressOfSyscall(SHORT SyscallIndex) {
+		return (PVOID)((ULONG64)Win32kTable->ServiceTable + (Win32kTable->ServiceTable[SyscallIndex] >> 4));
+	}
+
 	BOOLEAN GetSsdt()
 	{
 		PVOID KernelTextSectionBase = 0;

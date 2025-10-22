@@ -137,7 +137,7 @@ namespace Hider
 						goto End;
 				}
 
-				HiddenThread = (PHIDDEN_THREAD)ExAllocatePoolWithTag(NonPagedPool, sizeof(HIDDEN_THREAD), DRIVER_TAG);
+				HiddenThread = (PHIDDEN_THREAD)ExAllocatePool2(NonPagedPool, sizeof(HIDDEN_THREAD), DRIVER_TAG);
 				if (HiddenThread == NULL)
 					return NULL;
 
@@ -325,7 +325,7 @@ namespace Hider
 
 	BOOLEAN CreateEntry(PEPROCESS DebuggerProcess, PEPROCESS DebuggedProcess)
 	{
-		PHIDDEN_PROCESS HiddenProcess = (PHIDDEN_PROCESS)ExAllocatePoolWithTag(NonPagedPool, sizeof(HIDDEN_PROCESS), DRIVER_TAG);
+		PHIDDEN_PROCESS HiddenProcess = (PHIDDEN_PROCESS)ExAllocatePool2(NonPagedPool, sizeof(HIDDEN_PROCESS), DRIVER_TAG);
 		if (HiddenProcess == NULL)
 		{
 			LogError("Allocation failed");
@@ -476,18 +476,6 @@ namespace Hider
 					HiddenProcess->BypassProcessFreezeFlagCleared = TRUE;
 				}
 
-				if (HideInfo->ClearPebBeingDebugged == TRUE && HiddenProcess->PebBeingDebuggedCleared == FALSE)
-				{
-					SetPebDeuggerFlag(HiddenProcess->DebuggedProcess, FALSE);
-					HiddenProcess->PebBeingDebuggedCleared = TRUE;
-				}
-
-				if (HideInfo->ClearPebNtGlobalFlag == TRUE && HiddenProcess->PebNtGlobalFlagCleared == FALSE)
-				{
-					ClearPebNtGlobalFlag(HiddenProcess->DebuggedProcess);
-					HiddenProcess->PebNtGlobalFlagCleared = TRUE;
-				}
-
 				if (HideInfo->ClearHeapFlags == TRUE && HiddenProcess->HeapFlagsCleared == FALSE)
 				{
 					ClearHeapFlags(HiddenProcess->DebuggedProcess);
@@ -612,4 +600,7 @@ namespace Hider
 
 		return FALSE;
 	}
+	
 }
+
+

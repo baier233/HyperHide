@@ -115,6 +115,59 @@ BOOLEAN GetNtSyscallNumbers(std::array<SyscallInfo, 22>& SyscallsToFind)
 	return status;
 }
 
+BOOLEAN GetNtSyscallNumber(SyscallInfo& syscallInfo)
+{
+	UNICODE_STRING knownDlls{};
+	RtlInitUnicodeString(&knownDlls, LR"(\KnownDlls\ntdll.dll)");
+
+	OBJECT_ATTRIBUTES objAttributes{};
+	InitializeObjectAttributes(&objAttributes, &knownDlls, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
+
+	HANDLE section{};
+	if (!NT_SUCCESS(ZwOpenSection(&section, SECTION_MAP_READ, &objAttributes)))
+		return false;
+
+	PVOID ntdllBase{};
+	size_t ntdllSize{};
+	LARGE_INTEGER sectionOffset{};
+	if (!NT_SUCCESS(ZwMapViewOfSection(section, ZwCurrentProcess(), &ntdllBase, 0, 0, &sectionOffset, &ntdllSize, ViewShare, 0, PAGE_READONLY)))
+	{
+		ZwClose(section);
+		return false;
+	}
+
+	auto status = true;
+	if (syscallInfo.SyscallName == "NtQuerySystemTime")
+	{
+		const auto functionAddress = GetExportedFunctionAddress(0, ntdllBase, "NtAccessCheckByTypeAndAuditAlarm");
+		if (!functionAddress)
+		{
+			status = false;
+			return false;
+		}
+
+		syscallInfo.SyscallNumber = GetSyscallNumber(functionAddress) + 1;
+	}
+	else
+	{
+		const auto functionAddress = GetExportedFunctionAddress(0, ntdllBase, syscallInfo.SyscallName.data());
+		if (!functionAddress)
+		{
+			status = false;
+			return false;
+		}
+
+		syscallInfo.SyscallNumber = GetSyscallNumber(functionAddress);
+	}
+
+	LogDebug("Syscall %s is equal: 0x%X", syscallInfo.SyscallName.data(), syscallInfo.SyscallNumber);
+
+	ZwClose(section);
+	ZwUnmapViewOfSection(ZwCurrentProcess(), ntdllBase);
+
+	return status;
+}
+
 VOID GetWin32kSyscallNumbersPreRedstone(std::array<SyscallInfo, 5>& SyscallsToFind)
 {
 	SyscallsToFind[0].SyscallName = "NtUserBuildHwndList";

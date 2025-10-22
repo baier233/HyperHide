@@ -41,8 +41,6 @@ public:
         BOOLEAN HookKuserSharedData;
         BOOLEAN HookKiExceptionDispatch;
         BOOLEAN HookNtSetInformationProcess;
-        BOOLEAN ClearPebBeingDebugged;
-        BOOLEAN ClearPebNtGlobalFlag;
         BOOLEAN ClearHeapFlags;
         BOOLEAN ClearKuserSharedData;
         BOOLEAN ClearHideFromDebuggerFlag;

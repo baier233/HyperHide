@@ -65,8 +65,6 @@ typedef struct _HIDE_INFO
 	BOOLEAN HookKuserSharedData;
 	BOOLEAN HookKiDispatchException;
 	BOOLEAN HookNtSetInformationProcess;
-	BOOLEAN ClearPebBeingDebugged;
-	BOOLEAN ClearPebNtGlobalFlag;
 	BOOLEAN ClearHeapFlags;
 	BOOLEAN ClearKuserSharedData;
 	BOOLEAN ClearHideFromDebuggerFlag;
@@ -163,9 +161,7 @@ namespace Hider
 
 		BOOLEAN ProcessPaused;
 
-		BOOLEAN PebBeingDebuggedCleared;
 		BOOLEAN HeapFlagsCleared;
-		BOOLEAN PebNtGlobalFlagCleared;
 		BOOLEAN KUserSharedDataCleared;
 		BOOLEAN HideFromDebuggerFlagCleared;
 		BOOLEAN BypassProcessFreezeFlagCleared;
@@ -209,6 +205,8 @@ namespace Hider
 	BOOLEAN IsProcessWindowBad(PUNICODE_STRING WindowName);
 
 	BOOLEAN IsProcessWindowClassBad(PUNICODE_STRING WindowClassName);
+
+
 
 	VOID DeleteThreadList(PHIDDEN_PROCESS HiddenProcess);
 
