@@ -103,7 +103,6 @@
     <ClCompile Include="Peb.cpp" />
     <ClCompile Include="HookedFunctions.cpp" />
     <ClCompile Include="Ssdt.cpp" />
-    <ClCompile Include="undocumented.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -124,7 +123,6 @@
     <ClInclude Include="HookedFunctions.h" />
     <ClInclude Include="Pte.h" />
     <ClInclude Include="Ssdt.h" />
-    <ClInclude Include="undocumented.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="vmintrin.h" />
   </ItemGroup>

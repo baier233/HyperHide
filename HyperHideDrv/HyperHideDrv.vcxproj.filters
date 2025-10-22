@@ -58,9 +58,6 @@
     <ClCompile Include="Ssdt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="undocumented.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Log.h">
@@ -118,9 +115,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Ntenums.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="undocumented.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

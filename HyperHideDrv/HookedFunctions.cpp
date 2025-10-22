@@ -741,11 +741,17 @@ NTSTATUS NTAPI HookedNtQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInf
 		if (SystemInformationClass == SystemKernelDebuggerInformation)
 		{
 			PSYSTEM_KERNEL_DEBUGGER_INFORMATION DebuggerInfo = (PSYSTEM_KERNEL_DEBUGGER_INFORMATION)SystemInformation;
-
-			BACKUP_RETURNLENGTH();
-			DebuggerInfo->DebuggerEnabled = 0;
-			DebuggerInfo->DebuggerNotPresent = 1;
-			RESTORE_RETURNLENGTH();
+			__try {
+				BACKUP_RETURNLENGTH();
+				DebuggerInfo->DebuggerEnabled = 0;
+				DebuggerInfo->DebuggerNotPresent = 1;
+				RESTORE_RETURNLENGTH();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
+			
 		}
 
 		else if (SystemInformationClass == SystemProcessInformation ||
@@ -757,116 +763,163 @@ NTSTATUS NTAPI HookedNtQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInf
 			if (SystemInformationClass == SystemSessionProcessInformation)
 				ProcessInfo = (PSYSTEM_PROCESS_INFO)((PSYSTEM_SESSION_PROCESS_INFORMATION)SystemInformation)->Buffer;
 
-			BACKUP_RETURNLENGTH();
+			__try {
+				BACKUP_RETURNLENGTH();
 
-			FilterProcesses(ProcessInfo);
+				FilterProcesses(ProcessInfo);
 
-			for (PSYSTEM_PROCESS_INFO Entry = ProcessInfo; Entry->NextEntryOffset != NULL; Entry = (PSYSTEM_PROCESS_INFO)((UCHAR*)Entry + Entry->NextEntryOffset))
-			{
-				if (Hider::IsHidden(PidToProcess(Entry->ProcessId), HIDE_NT_QUERY_SYSTEM_INFORMATION) == TRUE)
+				for (PSYSTEM_PROCESS_INFO Entry = ProcessInfo; Entry->NextEntryOffset != NULL; Entry = (PSYSTEM_PROCESS_INFO)((UCHAR*)Entry + Entry->NextEntryOffset))
 				{
-					PEPROCESS ExplorerProcess = GetProcessByName(L"explorer.exe");
-					if (ExplorerProcess != NULL)
-						Entry->InheritedFromProcessId = PsGetProcessId(ExplorerProcess);
+					if (Hider::IsHidden(PidToProcess(Entry->ProcessId), HIDE_NT_QUERY_SYSTEM_INFORMATION) == TRUE)
+					{
+						PEPROCESS ExplorerProcess = GetProcessByName(L"explorer.exe");
+						if (ExplorerProcess != NULL)
+							Entry->InheritedFromProcessId = PsGetProcessId(ExplorerProcess);
 
-					Entry->OtherOperationCount.QuadPart = 1;
+						Entry->OtherOperationCount.QuadPart = 1;
+					}
 				}
+				RESTORE_RETURNLENGTH();
 			}
-			RESTORE_RETURNLENGTH();
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
+			
 		}
 
 		else if (SystemInformationClass == SystemCodeIntegrityInformation)
 		{
-			BACKUP_RETURNLENGTH();
-			((PSYSTEM_CODEINTEGRITY_INFORMATION)SystemInformation)->CodeIntegrityOptions = 0x1; // CODEINTEGRITY_OPTION_ENABLED
-			RESTORE_RETURNLENGTH();
+			__try{
+				BACKUP_RETURNLENGTH();
+				((PSYSTEM_CODEINTEGRITY_INFORMATION)SystemInformation)->CodeIntegrityOptions = 0x1; // CODEINTEGRITY_OPTION_ENABLED
+				RESTORE_RETURNLENGTH();
+			}__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 
 		else if (SystemInformationClass == SystemKernelDebuggerInformationEx)
 		{
-			BACKUP_RETURNLENGTH();
-			((PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX)SystemInformation)->DebuggerAllowed = FALSE;
-			((PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX)SystemInformation)->DebuggerEnabled = FALSE;
-			((PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX)SystemInformation)->DebuggerPresent = FALSE;
-			RESTORE_RETURNLENGTH();
+			__try {
+
+				BACKUP_RETURNLENGTH();
+				((PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX)SystemInformation)->DebuggerAllowed = FALSE;
+				((PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX)SystemInformation)->DebuggerEnabled = FALSE;
+				((PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX)SystemInformation)->DebuggerPresent = FALSE;
+				RESTORE_RETURNLENGTH();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 
 		else if (SystemInformationClass == SystemKernelDebuggerFlags)
 		{
-			BACKUP_RETURNLENGTH();
-			*(UCHAR*)SystemInformation = NULL;
-			RESTORE_RETURNLENGTH();
+			__try {
+				BACKUP_RETURNLENGTH();
+				*(UCHAR*)SystemInformation = NULL;
+				RESTORE_RETURNLENGTH();
+
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 
 		else if (SystemInformationClass == SystemExtendedHandleInformation)
 		{
 			const auto systemHandleInfoEx = reinterpret_cast<PSYSTEM_HANDLE_INFORMATION_EX>(SystemInformation);
-			BACKUP_RETURNLENGTH();
-
-			std::span systemHandleTableEntryInfo{ systemHandleInfoEx->Handles, systemHandleInfoEx->NumberOfHandles };
-			const auto newEnd = std::remove_if(systemHandleTableEntryInfo.begin(), systemHandleTableEntryInfo.end(), [](auto& HandleEntryInfo)
-				{
-					const auto originalProcess = PidToProcess(HandleEntryInfo.UniqueProcessId);
-					if (!originalProcess)
-						return false;
-
-					auto processName = PsQueryFullProcessImageName(originalProcess);
-					return static_cast<bool>(Hider::IsProcessNameBad(&processName));
-				});
-
-			if (newEnd != systemHandleTableEntryInfo.end())
+			__try
 			{
-				const auto numberOfHandleInfos = std::distance(newEnd, systemHandleTableEntryInfo.end());
-				RtlSecureZeroMemory(&*newEnd, sizeof(decltype(systemHandleTableEntryInfo)::element_type) * numberOfHandleInfos);
-				systemHandleInfoEx->NumberOfHandles -= numberOfHandleInfos;
-			}
+				BACKUP_RETURNLENGTH();
 
-			RESTORE_RETURNLENGTH();
+				std::span systemHandleTableEntryInfo{ systemHandleInfoEx->Handles, systemHandleInfoEx->NumberOfHandles };
+				const auto newEnd = std::remove_if(systemHandleTableEntryInfo.begin(), systemHandleTableEntryInfo.end(), [](auto& HandleEntryInfo)
+					{
+						const auto originalProcess = PidToProcess(HandleEntryInfo.UniqueProcessId);
+						if (!originalProcess)
+							return false;
+
+						auto processName = PsQueryFullProcessImageName(originalProcess);
+						return static_cast<bool>(Hider::IsProcessNameBad(&processName));
+					});
+
+				if (newEnd != systemHandleTableEntryInfo.end())
+				{
+					const auto numberOfHandleInfos = std::distance(newEnd, systemHandleTableEntryInfo.end());
+					RtlSecureZeroMemory(&*newEnd, sizeof(decltype(systemHandleTableEntryInfo)::element_type) * numberOfHandleInfos);
+					systemHandleInfoEx->NumberOfHandles -= numberOfHandleInfos;
+				}
+
+				RESTORE_RETURNLENGTH();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 
 		else if (SystemInformationClass == SystemHandleInformation)
 		{
 			const auto systemHandleInfo = reinterpret_cast<PSYSTEM_HANDLE_INFORMATION>(SystemInformation);
-			BACKUP_RETURNLENGTH();
-
-			std::span systemHandleTableEntryInfo{ systemHandleInfo->Handles, systemHandleInfo->NumberOfHandles };
-			const auto newEnd = std::remove_if(systemHandleTableEntryInfo.begin(), systemHandleTableEntryInfo.end(), [](auto& HandleEntryInfo)
-				{
-					const auto originalProcess = PidToProcess(HandleEntryInfo.UniqueProcessId);
-					if (!originalProcess)
-						return false;
-
-					auto processName = PsQueryFullProcessImageName(originalProcess);
-					return static_cast<bool>(Hider::IsProcessNameBad(&processName));
-				});
-
-			if (newEnd != systemHandleTableEntryInfo.end())
+			__try
 			{
-				const auto numberOfHandleInfos = std::distance(newEnd, systemHandleTableEntryInfo.end());
-				RtlSecureZeroMemory(&*newEnd, sizeof(decltype(systemHandleTableEntryInfo)::element_type) * numberOfHandleInfos);
-				systemHandleInfo->NumberOfHandles -= static_cast<ULONG>(numberOfHandleInfos);
-			}
+				BACKUP_RETURNLENGTH();
 
-			RESTORE_RETURNLENGTH();
+				std::span systemHandleTableEntryInfo{ systemHandleInfo->Handles, systemHandleInfo->NumberOfHandles };
+				const auto newEnd = std::remove_if(systemHandleTableEntryInfo.begin(), systemHandleTableEntryInfo.end(), [](auto& HandleEntryInfo)
+					{
+						const auto originalProcess = PidToProcess(HandleEntryInfo.UniqueProcessId);
+						if (!originalProcess)
+							return false;
+
+						auto processName = PsQueryFullProcessImageName(originalProcess);
+						return static_cast<bool>(Hider::IsProcessNameBad(&processName));
+					});
+
+				if (newEnd != systemHandleTableEntryInfo.end())
+				{
+					const auto numberOfHandleInfos = std::distance(newEnd, systemHandleTableEntryInfo.end());
+					RtlSecureZeroMemory(&*newEnd, sizeof(decltype(systemHandleTableEntryInfo)::element_type) * numberOfHandleInfos);
+					systemHandleInfo->NumberOfHandles -= static_cast<ULONG>(numberOfHandleInfos);
+				}
+
+				RESTORE_RETURNLENGTH();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 
 		else if (SystemInformationClass == SystemPoolTagInformation)
 		{
-			const auto systemPooltagInfo = reinterpret_cast<PSYSTEM_POOLTAG_INFORMATION>(SystemInformation);
-			BACKUP_RETURNLENGTH();
-
-			std::span poolTags{ systemPooltagInfo->TagInfo, systemPooltagInfo->Count };
-			const auto newEnd = std::remove_if(poolTags.begin(), poolTags.end(), [](auto& PoolTag) 
-				{return PoolTag.TagUlong == DRIVER_TAG || PoolTag.TagUlong == 'vhra' ? true : false;});
-
-			if (newEnd != poolTags.end())
+			__try
 			{
-				const auto numberOfPools = std::distance(newEnd, poolTags.end());
-				RtlSecureZeroMemory(&*newEnd, sizeof(decltype(poolTags)::element_type) * numberOfPools);
-				systemPooltagInfo->Count -= static_cast<ULONG>(numberOfPools);
-			}
+				const auto systemPooltagInfo = reinterpret_cast<PSYSTEM_POOLTAG_INFORMATION>(SystemInformation);
+				BACKUP_RETURNLENGTH();
 
-			RESTORE_RETURNLENGTH();
+				std::span poolTags{ systemPooltagInfo->TagInfo, systemPooltagInfo->Count };
+				const auto newEnd = std::remove_if(poolTags.begin(), poolTags.end(), [](auto& PoolTag)
+					{return PoolTag.TagUlong == DRIVER_TAG || PoolTag.TagUlong == 'vhra' ? true : false; });
+
+				if (newEnd != poolTags.end())
+				{
+					const auto numberOfPools = std::distance(newEnd, poolTags.end());
+					RtlSecureZeroMemory(&*newEnd, sizeof(decltype(poolTags)::element_type) * numberOfPools);
+					systemPooltagInfo->Count -= static_cast<ULONG>(numberOfPools);
+				}
+
+				RESTORE_RETURNLENGTH();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				Status = GetExceptionCode();
+			}
 		}
 	}
 
